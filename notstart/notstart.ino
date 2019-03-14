@@ -6,6 +6,8 @@ int LEDPin = 13;
 int SchalterPinAn = 2;
 int SchalterPinAus = 4;
 int ServoPin = 9;
+int AnlasserPin = 10;
+int SpannungsPin = 11;
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long lastMillis1;
@@ -14,6 +16,7 @@ unsigned long lastMillis2;
 // Boolean Werte für Statiänderungen
 bool anschalten = false;
 bool ausschalten = false;
+bool laeuft = false;
 
 
 void setup() {
@@ -25,6 +28,8 @@ void setup() {
   pinMode(LEDPin, OUTPUT);
   pinMode(SchalterPinAn, INPUT);
   pinMode(SchalterPinAus, INPUT);
+  pinMode(AnlasserPin, OUTPUT);
+  pinMode(SpannungsPin, INPUT);
 
 
   // Zeitstempel erfassen
@@ -85,9 +90,16 @@ void loop() {
         pos++;
         delay(15);                       // waits 15ms for the servo to reach the position
         //        Serial.println(pos);
-      }
+        }
     }
     kaltstart = 1;
+
+    // Startversuch
+    Serial.println("Es wird gestartet");
+    lastMillis2 = millis();
+    digitalWrite(AnlasserPin, HIGH);
+    delay(3000);
+    digitalWrite(AnlasserPin, LOW);
 
 
 

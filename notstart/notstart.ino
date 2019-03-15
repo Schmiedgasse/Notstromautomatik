@@ -3,13 +3,14 @@
 
 Servo choke;
 int pos = 0;
-int LEDPin = 13;
-int SchalterPinAn = 2;
-int SchalterPinAus = 4;
-int ServoPin = 9;
-int AnlasserPin = 7;
-char SpannungsPin = "A1";
-char VBattPin = "A0";
+int anlassversuch = 0;
+const int LEDPin = 13;
+const int SchalterPinAn = 2;
+const int SchalterPinAus = 4;
+const int ServoPin = 9;
+const int AnlasserPin = 7;
+const char SpannungsPin = A1;
+const char VBattPin = A0;
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long lastMillis1;
@@ -50,13 +51,10 @@ void loop() {
   // Variablendeklaration
   int kaltstart = 0;
   int VBattVoltage = analogRead(VBattPin);
+  // read the input on analog pin 0:
+  int limaspannung = analogRead(SpannungsPin);
+  int volt;
 
-  // Schalterzustand mit was initialisieren was normal nicht vorkommt, damit erst dann wenn
-  // der Schalter gedrückt wird etwas getan wird.
-
-  // put your main code here, to run repeatedly:
-  // Schalterzustand = digitalRead(SchalterPin);
-  //  Serial.println(Schalterzustand,DEC);
 
   // Wenn der Anschalter zum ersten Mal gedrückt wird
   if (digitalRead(SchalterPinAn) == 1) {
@@ -72,7 +70,7 @@ void loop() {
 
 
 
-  // Verarbeitunsschleife die endlos laufen soll wenn Status AN ist.
+  // Anlassen vom Motor
 
   while (anschalten) {
     // Prüfen ob LED schon an
@@ -92,7 +90,7 @@ void loop() {
         pos++;
         delay(15);                       // waits 15ms for the servo to reach the position
         //        Serial.println(pos);
-        }
+      }
     }
     kaltstart = 1;
 
@@ -100,8 +98,7 @@ void loop() {
     Serial.println("Es wird gestartet");
     lastMillis2 = millis();
     digitalWrite(AnlasserPin, HIGH);
-    
-    delay(3000);
+    delay(4000);
     digitalWrite(AnlasserPin, LOW);
 
 
@@ -112,46 +109,57 @@ void loop() {
     // Wenn der Ausschalter gedrückt wird
     if (digitalRead(SchalterPinAus) == 1) {
       ausschalten = true;
+      anschalten = false;
       Serial.println("Es wurde ausgeschaltet");
 
     }
+    // Überprüfen ob der Motor läuft
+    float voltage = (limaspannung / 5 * 4.85) / 4.092 ; //Spannungsteiler. Spannung meines Arduino ist bei 4.76 Volt
+    volt = (int)voltage;
+    voltage = ((volt % 100) / 10.0);
+    // voltage hat den Spannungswert intus
 
-    anschalten = false;
-  }
+    // Prüfen anhand der Lima-Spannung ob der Motor läuft.
+    if (voltage > 12) {
+      // sorgt dafür das die Anschalten Schleife verlassen wird
+      Serial.println("Limaspannung erreicht, Motor läuft");
+      anschalten = false;
+      laeuft = true;
+      if (pos > 0) {
+        Serial.println("Motor läuft, Choke wieder zu");
+        // Nachdem der Motor läuft soll der Choke wieder zugemacht werden.
 
-
-
-// 15 Sekunden nach Choke auf muss der Choke wieder zugemacht werden.
-if (pos > 0) {
-    // 5 Sekunden warten ohne das Programm aufzuhalten
-    if ((millis() - lastMillis1) >= 15000) {
-      Serial.println("Zeitablauf, Choke wieder zu");
-      // Nachdem der Motor läuft soll der Choke wieder zugemacht werden.
-      // Hier momentan durch eine Zeitverzögerung realisiert, in echt soll D+ oder
-      // die Spannungsversorgung gelesen werden.
-
-      while (pos > 0) {
-        choke.write(pos);
-        pos--;
-        delay(15);
+        while (pos > 0) {
+          choke.write(pos);
+          pos--;
+          delay(15);
+        }
       }
-
-      // Zeitschalter zurücksetzen
-      lastMillis1 = millis();
+    } else {
+      // Falls Limaspannung kleiner 12 und Motor nicht läuft neuer Startversuch
+      // Nur 3 mal soll angelassen werden und nicht endlos.
+      if (anlassversuch = 3) {
+        anschalten = false;
+        Serial.println("Abbruch nach 3 erfolglosen Anlassversuchen");
+      } else {
+      // 10 Sekunden warten vor dem nächsten Startversuch
+      delay(10000);
+      anlassversuch++;
+      }
     }
 
-}
 
+  }
 
-  // Hier wird alles wieder ausgeschaltet.
+  // Hier wird alles wieder ausgeschaltet. Wenn jemand den Ausschalter betätigt hat.
 
   while (ausschalten) {
     if (digitalRead(LEDPin)) {
-      // LED-Ausgabe auf AN
+      // LED-Ausgabe auf AUS
       digitalWrite(LEDPin, LOW);
       Serial.println("LED geht AUS");
     }
-   
+
     // Wenn der Choke nicht auf Null steht, dann werden wir den Choke zurückfahren.
 
     if (pos > 0) {

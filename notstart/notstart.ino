@@ -7,9 +7,9 @@ int LEDPin = 13;
 int SchalterPinAn = 2;
 int SchalterPinAus = 4;
 int ServoPin = 9;
-int AnlasserPin = 10;
-int SpannungsPin = 11;
-int VSpannungsPin = 12;
+int AnlasserPin = 7;
+char SpannungsPin = "A1";
+char VBattPin = "A0";
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long lastMillis1;
@@ -31,7 +31,6 @@ void setup() {
   pinMode(SchalterPinAn, INPUT);
   pinMode(SchalterPinAus, INPUT);
   pinMode(AnlasserPin, OUTPUT);
-  pinMode(SpannungsPin, INPUT);
 
 
   // Zeitstempel erfassen
@@ -50,6 +49,7 @@ void setup() {
 void loop() {
   // Variablendeklaration
   int kaltstart = 0;
+  int VBattVoltage = analogRead(VBattPin);
 
   // Schalterzustand mit was initialisieren was normal nicht vorkommt, damit erst dann wenn
   // der Schalter gedrückt wird etwas getan wird.
@@ -100,6 +100,7 @@ void loop() {
     Serial.println("Es wird gestartet");
     lastMillis2 = millis();
     digitalWrite(AnlasserPin, HIGH);
+    
     delay(3000);
     digitalWrite(AnlasserPin, LOW);
 

@@ -1,4 +1,5 @@
 #include <Servo.h>
+//#include <notstart.h>
 
 Servo choke;
 int pos = 0;
@@ -8,6 +9,7 @@ int SchalterPinAus = 4;
 int ServoPin = 9;
 int AnlasserPin = 10;
 int SpannungsPin = 11;
+int VSpannungsPin = 12;
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long lastMillis1;

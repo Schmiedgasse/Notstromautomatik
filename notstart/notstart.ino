@@ -11,6 +11,8 @@ const int ServoPin = 9;
 const int AnlasserPin = 7;
 const char SpannungsPin = A1;
 const char VBattPin = A0;
+// Wert kann angepasst werden an die Spannung die der Arduino wirklich hat.
+const float arduino5v = 4.88;
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long lastMillis1;
@@ -20,6 +22,7 @@ unsigned long lastMillis2;
 bool anschalten = false;
 bool ausschalten = false;
 bool laeuft = false;
+boolean LEDvalue = LOW;
 
 
 void setup() {
@@ -45,6 +48,9 @@ void setup() {
   //Servo auf Anfangszustand zurücksetzen
   Serial.println("Choke auf Anfangsstellung zurücksetzen");
   choke.write(pos);
+  Serial.println("Ready to Go....");
+
+
 }
 
 void loop() {
@@ -98,7 +104,7 @@ void loop() {
     Serial.println("Es wird gestartet");
     lastMillis2 = millis();
     digitalWrite(AnlasserPin, HIGH);
-    delay(4000);
+    delay(7000);
     digitalWrite(AnlasserPin, LOW);
 
 
@@ -114,11 +120,18 @@ void loop() {
 
     }
     // Überprüfen ob der Motor läuft
-    float voltage = (limaspannung / 5 * 4.85) / 4.092 ; //Spannungsteiler. Spannung meines Arduino ist bei 4.76 Volt
+    limaspannung = analogRead(SpannungsPin);
+    Serial.print("Limaspannung Sensorwert liegt bei");
+    Serial.print(limaspannung);
+    Serial.println("");
+    float voltage = ((limaspannung / 5 * arduino5v) / 4.092) ; //Spannungsteiler. Spannung meines Arduino ist bei 4.76 Volt
     volt = (int)voltage;
-    voltage = ((volt % 100) / 10.0);
+    voltage = (volt / 10.0);
     // voltage hat den Spannungswert intus
-
+    Serial.print("Aktuelle Spannung liegt bei");
+    Serial.print(voltage);
+    Serial.print("Volt");
+    Serial.println("");
     // Prüfen anhand der Lima-Spannung ob der Motor läuft.
     if (voltage > 12) {
       // sorgt dafür das die Anschalten Schleife verlassen wird
@@ -138,22 +151,37 @@ void loop() {
     } else {
       // Falls Limaspannung kleiner 12 und Motor nicht läuft neuer Startversuch
       // Nur 3 mal soll angelassen werden und nicht endlos.
-      if (anlassversuch = 3) {
+      if (anlassversuch == 3) {
         anschalten = false;
         Serial.println("Abbruch nach 3 erfolglosen Anlassversuchen");
       } else {
-      // 10 Sekunden warten vor dem nächsten Startversuch
-      delay(10000);
-      anlassversuch++;
+        // 10 Sekunden warten vor dem nächsten Startversuch
+        Serial.println("Erfolgloser Anlassversucht, Zähler hoch 10 Sekunden warten und nochmal");
+        delay(10000);
+        anlassversuch++;
       }
     }
 
 
   }
 
+  if (laeuft) {
+    if (millis() > lastMillis2 + 1000) {
+      LEDvalue = !LEDvalue;
+      lastMillis2 = millis();
+    
+    digitalWrite(LEDPin, LEDvalue);
+    }
+
+
+
+  }
+
+
   // Hier wird alles wieder ausgeschaltet. Wenn jemand den Ausschalter betätigt hat.
 
   while (ausschalten) {
+    laeuft = false;
     if (digitalRead(LEDPin)) {
       // LED-Ausgabe auf AUS
       digitalWrite(LEDPin, LOW);

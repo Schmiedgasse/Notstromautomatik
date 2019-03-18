@@ -12,7 +12,9 @@ const int AnlasserPin = 7;
 const char SpannungsPin = A1;
 const char VBattPin = A0;
 // Wert kann angepasst werden an die Spannung die der Arduino wirklich hat.
-const float arduino5v = 4.88;
+// const float arduino5v = 4.88;
+// Wie lange soll der Anlasser orgeln
+const int anlassertime = 3000;
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long lastMillis1;
@@ -56,11 +58,12 @@ void setup() {
 void loop() {
   // Variablendeklaration
   int kaltstart = 0;
-  int VBattVoltage = analogRead(VBattPin);
+  int VBattVoltage = analogRead(VBattPin); // Der reine Wert noch vor dem Startversuch reicht als Vergleich
   // read the input on analog pin 0:
-  int limaspannung = analogRead(SpannungsPin);
-  int volt;
-
+  // Vergleichswerte für AnlasserBatterie
+  int idlespannung = analogRead(SpannungsPin);
+  //int volt;
+  
 
   // Wenn der Anschalter zum ersten Mal gedrückt wird
   if (digitalRead(SchalterPinAn) == 1) {
@@ -85,9 +88,9 @@ void loop() {
       digitalWrite(LEDPin, HIGH);
       Serial.println("LED geht AN");
     }
-    //Langsam den Choke aufmachen
+    //Langsam den Choke aufmachen. Wir machen den Choke vor jedem Startvorgang auf
 
-    if (kaltstart == 0) {
+ //   if (kaltstart == 0) {
       lastMillis1 = millis();
       Serial.println("Kaltstart, Choke aufmachen");
       while (pos < 90) { // goes from 0 degrees to 90 degrees
@@ -96,18 +99,24 @@ void loop() {
         pos++;
         delay(15);                       // waits 15ms for the servo to reach the position
         //        Serial.println(pos);
-      }
+ //     }
     }
-    kaltstart = 1;
+ //   kaltstart = 1;
 
     // Startversuch
     Serial.println("Es wird gestartet");
     lastMillis2 = millis();
     digitalWrite(AnlasserPin, HIGH);
-    delay(7000);
+    delay(anlassertime);
     digitalWrite(AnlasserPin, LOW);
-
-
+    // direkt nach dem Startversuch den Choke zurückdrehen
+    if (pos > 0) {
+        Serial.println("Choke wieder zu");
+       while (pos > 0) {
+          choke.write(pos);
+          pos--;
+          delay(15);
+        }
 
     // Um die Schleife abzubrechen wenn Aus gedrückt wird müssen wir natürlich innerhalb der
     // Schleife den Status des Ausschalters überwachen.
@@ -119,44 +128,36 @@ void loop() {
       Serial.println("Es wurde ausgeschaltet");
 
     }
-    // Überprüfen ob der Motor läuft
+    // Nach kurzer Wartezeit überprüfen ob der Motor läuft
+    delay(5000);
     limaspannung = analogRead(SpannungsPin);
     Serial.print("Limaspannung Sensorwert liegt bei");
     Serial.print(limaspannung);
     Serial.println("");
-    float voltage = ((limaspannung / 5 * arduino5v) / 4.092) ; //Spannungsteiler. Spannung meines Arduino ist bei 4.76 Volt
-    volt = (int)voltage;
-    voltage = (volt / 10.0);
-    // voltage hat den Spannungswert intus
-    Serial.print("Aktuelle Spannung liegt bei");
-    Serial.print(voltage);
-    Serial.print("Volt");
-    Serial.println("");
+   // float voltage = ((limaspannung / 5 * arduino5v) / 4.092) ; //Spannungsteiler. Spannung meines Arduino ist bei 4.76 Volt
+   // volt = (int)voltage;
+   // voltage = (volt / 10.0);
+   // // voltage hat den Spannungswert intus
+   // Serial.print("Aktuelle Spannung liegt bei");
+   // Serial.print(voltage);
+   // Serial.print("Volt");
+   // Serial.println("");
     // Prüfen anhand der Lima-Spannung ob der Motor läuft.
-    if (voltage > 12) {
+    if (limaspannung >= (idlespannung + 10)) {
       // sorgt dafür das die Anschalten Schleife verlassen wird
-      Serial.println("Limaspannung erreicht, Motor läuft");
+      Serial.println("Spannung höher als vor Start, Motor läuft");
       anschalten = false;
       laeuft = true;
-      if (pos > 0) {
-        Serial.println("Motor läuft, Choke wieder zu");
-        // Nachdem der Motor läuft soll der Choke wieder zugemacht werden.
-
-        while (pos > 0) {
-          choke.write(pos);
-          pos--;
-          delay(15);
-        }
-      }
+    }
     } else {
-      // Falls Limaspannung kleiner 12 und Motor nicht läuft neuer Startversuch
+      // Falls Spannung nicht größer als vor dem Anlassvorgang und Motor nicht läuft neuer Startversuch
       // Nur 3 mal soll angelassen werden und nicht endlos.
       if (anlassversuch == 3) {
         anschalten = false;
         Serial.println("Abbruch nach 3 erfolglosen Anlassversuchen");
       } else {
         // 10 Sekunden warten vor dem nächsten Startversuch
-        Serial.println("Erfolgloser Anlassversucht, Zähler hoch 10 Sekunden warten und nochmal");
+        Serial.println("Erfolgloser Anlassversuch, Zähler hoch 10 Sekunden warten und nochmal");
         delay(10000);
         anlassversuch++;
       }

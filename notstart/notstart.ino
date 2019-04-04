@@ -4,17 +4,20 @@
 Servo choke;
 int pos = 0;
 int anlassversuch = 0;
-const int LEDPin = 13;
-const int SchalterPinAn = 2;
-const int SchalterPinAus = 4;
-const int ServoPin = 9;
-const int AnlasserPin = 7;
-const char SpannungsPin = A1;
-const char VBattPin = A0;
+const int LEDPin = 13; // LED
+const int SchalterPinAn = 2; // Schalter
+const int SchalterPinAus = 4; // Schalter
+const int ServoPin = 9; // Hier hinter steckt ein Servo
+const int AnlasserPin = 7; // Relais für den Anlasser
+const char SpannungsPin = A1; // Spannungssensor Anlasserbatterie
+const char VBattPin = A0; // Spannungssensor Versorgungsbatterie
+const int IgnitionPin = 10; // Relais Zündung ein
+
+
 // Wert kann angepasst werden an die Spannung die der Arduino wirklich hat.
 // const float arduino5v = 4.88;
 // Wie lange soll der Anlasser orgeln
-const int anlassertime = 3000;
+const int anlassertime = 3000; // Zeit die der Anlasser orgeln soll
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long lastMillis1;
@@ -37,7 +40,7 @@ void setup() {
   pinMode(SchalterPinAn, INPUT);
   pinMode(SchalterPinAus, INPUT);
   pinMode(AnlasserPin, OUTPUT);
-
+  pinMode(IgnitionPin, OUTPUT);
 
   // Zeitstempel erfassen
   lastMillis1 = millis();
@@ -58,10 +61,11 @@ void setup() {
 void loop() {
   // Variablendeklaration
   int kaltstart = 0;
-  int VBattVoltage = analogRead(VBattPin); // Der reine Wert noch vor dem Startversuch reicht als Vergleich
+  int VBattVoltage = analogRead(VBattPin);
   // read the input on analog pin 0:
   // Vergleichswerte für AnlasserBatterie
   int idlespannung = analogRead(SpannungsPin);
+  int limaspannung = 0;
   //int volt;
   
 
@@ -77,8 +81,6 @@ void loop() {
     Serial.println("Es wurde ausgeschaltet");
   }
 
-
-
   // Anlassen vom Motor
 
   while (anschalten) {
@@ -88,6 +90,13 @@ void loop() {
       digitalWrite(LEDPin, HIGH);
       Serial.println("LED geht AN");
     }
+    
+    // Zündung muss angeschaltet werden.
+
+    digitalWrite(IgnitionPin, HIGH);
+    Serial.println("Zündung eingeschaltet");
+
+    
     //Langsam den Choke aufmachen. Wir machen den Choke vor jedem Startvorgang auf
 
  //   if (kaltstart == 0) {
@@ -188,6 +197,11 @@ void loop() {
       digitalWrite(LEDPin, LOW);
       Serial.println("LED geht AUS");
     }
+
+    //Zündung ausschalten zum Motor ausschalten
+    
+    digitalWrite(IgnitionPin, LOW);
+    Serial.println("Zündung ausgeschaltet");
 
     // Wenn der Choke nicht auf Null steht, dann werden wir den Choke zurückfahren.
 

@@ -2,31 +2,44 @@
 //#include <notstart.h>
 
 Servo choke;
-const int anfpos = 110; //Anfangsposition des Servos
-const int endpos = 50; //Endposition des Servos)
-int pos = anfpos;
-const unsigned long chokezeit = 200; // Zeit die der Choke offen sein soll, eine Sekunde = 1000
-int anlassversuch = 0;
+
+// Deklarierung der PINs:
 const int LEDPin = 13; // LED
 const int SchalterPinAn = 2; // Schalter
 const int SchalterPinAus = 4; // Schalter
 const int SchalterFunkAn = 3; // Schalter Funk
-int StatusFunk = 1; // Status Funkschalter
 const int ServoPin = 9; // Hier hinter steckt ein Servo
 const int AnlasserPin = 5; // Relais für den Anlasser
-const char SpannungsPin = A1; // Spannungssensor Anlasserbatterie
-const char VBattPin = A0; // Spannungssensor Versorgungsbatterie
+//const char SpannungsPin = A1; // Spannungssensor Anlasserbatterie
+//const char VBattPin = A0; // Spannungssensor Versorgungsbatterie
+const char LM35 = A0; // PIN für Temperatursensor LM35
 const int IgnitionPin = 10; // Relais Zündung ein
+const int VibrationPin = 6; // Vibrationssensor
+
+// Deklaration sonstiger wichtiger Werte
+const int anfpos = 110; //Anfangsposition des Servos
+const int endpos = 50; //Endposition des Servos)
+int pos = anfpos;
+int StatusFunk = 1; // Status Funkschalter
 int modus = 0;
 int einaus = 0;
 int endlageValue = 0;
 int Schritt = 0;
+const int choketemp = 60; // Grenzwert für Temperatur Choke
+int temperatur = 0; // Temperatur des Motors
+// int anlassversuch = 0;
+
+
+// Zeiten
+const unsigned long chokezeit = 200; // Zeit die der Choke offen sein soll, eine Sekunde = 1000
+unsigned long anlasserzeit = 2000; // Zeit die der Anlasser orgeln soll
+const unsigned long anlasserzeitohnechoke = 4000; // Zeit die der Anlasser ohne Choke (2. Versuch) orgeln soll
+const unsigned long laufzeit = 5000; // Zeit nachdem der Motor laufen sollte
 
 
 // Wert kann angepasst werden an die Spannung die der Arduino wirklich hat.
 // const float arduino5v = 4.88;
 // Wie lange soll der Anlasser orgeln
-const int anlasserzeit = 2000; // Zeit die der Anlasser orgeln soll
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long chokestart;
@@ -54,6 +67,7 @@ void setup() {
   pinMode(SchalterFunkAn, INPUT_PULLUP);  
   pinMode(AnlasserPin, OUTPUT);
   pinMode(IgnitionPin, OUTPUT);
+  pinMode(VibrationPin, INPUT);
 
   // Zeitstempel erfassen
 
@@ -76,6 +90,10 @@ void loop()
 {
 unsigned long currentMillis = millis();
 
+//Deklarierung von veränderlichen Werten
+int VibrationState = digitalRead(VibrationPin);
+int senstemperatur=analogRead(LM35);
+temperatur=map(senstemperatur, 0, 307, 0, 150); 
 
  // Wenn der Funk-Anschalter zum ersten Mal gedrückt wird
   if (digitalRead(SchalterFunkAn) == 0 && StatusFunk == 0) {
@@ -83,7 +101,8 @@ unsigned long currentMillis = millis();
     modus = 1;
     endlageValue = 0;
     currentMillis = millis();
-    previousMillis = 0;    
+    previousMillis = 0;
+        
     Schritt = 0;
     digitalWrite(LEDPin, HIGH);
     Serial.println("Es wurde ueber Funk angeschaltet");
@@ -118,7 +137,11 @@ unsigned long currentMillis = millis();
     endlageValue = 0;
     currentMillis = millis();
     previousMillis = 0;    
-    Schritt = 0;
+    if (temperatur > 40) {
+      Schritt = 1;
+    } else {
+    Schritt = 0;  
+    }
     digitalWrite(LEDPin, HIGH);
     Serial.println("LED geht AN");
     Serial.println("Es wurde angeschaltet");
@@ -179,10 +202,11 @@ if (modus == 1 && einaus == 1)
        case 4: // Anlasser stoppen
          Serial.println("Anlasser stoppen");
          digitalWrite(AnlasserPin, LOW);
-         Dauer = 1000;
+         Dauer = 10;
          break;
 
-       case 5: // Motor läuft
+       case 5: // Choke zu
+
          Serial.println("Motor läuft, Choke zu");
          if (pos < anfpos) {
             while (pos < anfpos) {
@@ -191,9 +215,43 @@ if (modus == 1 && einaus == 1)
             }
          }
 
-         endlageValue = 1;
          Dauer=chokezeit;
          break;
+
+       case 6: // Check ob Motor läuft
+         Serial.println(VibrationState);
+ 
+ /*      
+         if(VibrationState == HIGH)
+          {
+            digitalWrite(ledPin,HIGH);
+          }
+          else
+          {
+            digitalWrite(ledPin,LOW);
+          }
+
+*/          
+        Dauer=laufzeit;
+       
+
+      case 7: // Check ob Motor läuft
+
+        if(VibrationState == HIGH)
+        {
+         endlageValue = 1;       
+        }
+        else // Noch ein Startversuch aber ohne Choke
+        {
+         anlasserzeit=anlasserzeitohnechoke;
+         Schritt=2;
+         currentMillis = millis();
+         previousMillis = 0;    
+ 
+        }
+
+        Dauer=1;
+
 
        default:
          Schritt = 0;
@@ -246,23 +304,5 @@ if (modus == 1 && einaus == 0)
      }  //  if (currentMillis  - previousMillis > Dauer )  
    }   // if (endlageValue==0)
  } //   if (modus == 1)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 } // loop-Ende

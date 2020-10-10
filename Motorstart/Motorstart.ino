@@ -5,16 +5,15 @@ Servo choke;
 
 // Deklarierung der PINs:
 const int LEDPin = 13; // LED
-const int SchalterPinAn = 2; // Schalter
-const int SchalterPinAus = 4; // Schalter
-const int SchalterFunkAn = 3; // Schalter Funk
-const int ServoPin = 9; // Hier hinter steckt ein Servo
-const int AnlasserPin = 5; // Relais für den Anlasser
-//const char SpannungsPin = A1; // Spannungssensor Anlasserbatterie
+const int SchalterFunkAn = 4; // Schalter Funk
+const int ServoPin = 10; // Hier hinter steckt ein Servo
+const int AnlasserPin = 3; // Relais für den Anlasser
+//const char SpannungsPin = A2; // Spannungssensor Anlasserbatterie
 //const char VBattPin = A0; // Spannungssensor Versorgungsbatterie
-const char LM35 = A0; // PIN für Temperatursensor LM35
-const int IgnitionPin = 10; // Relais Zündung ein
-const int VibrationPin = 6; // Vibrationssensor
+const char LM35 = A4; // PIN für Temperatursensor LM35DZ am Motor
+const char LM35u = A5; // PIN für Temperatursensor Umgebung
+const int IgnitionPin = 2; // Relais Zündung ein
+const int VibrationPin = 5; // Vibrationssensor
 
 // Deklaration sonstiger wichtiger Werte
 const int anfpos = 110; //Anfangsposition des Servos
@@ -23,11 +22,12 @@ int pos = anfpos;
 int StatusFunk = 1; // Status Funkschalter
 int modus = 0;
 int einaus = 0;
-int endlageValue = 0;
 int Schritt = 0;
-const int choketemp = 60; // Grenzwert für Temperatur Choke
-int temperatur = 0; // Temperatur des Motors
-// int anlassversuch = 0;
+const int schwellwertchoke = 8; // Grenzwert für Temperatur Choke
+const int schwellwertlaeuft = 4; // Grenzwert für Temperatur läuft
+int tempmotor = 0; // Temperatur des Motors
+int tempumgebung = 0; // Umgebungstemperatur
+int versuchohnechoke = 0;
 
 
 // Zeiten
@@ -35,11 +35,10 @@ const unsigned long chokezeit = 200; // Zeit die der Choke offen sein soll, eine
 unsigned long anlasserzeit = 2000; // Zeit die der Anlasser orgeln soll
 const unsigned long anlasserzeitohnechoke = 4000; // Zeit die der Anlasser ohne Choke (2. Versuch) orgeln soll
 const unsigned long laufzeit = 5000; // Zeit nachdem der Motor laufen sollte
-
+const unsigned long motorcheckzeit = 10000; // Zeit nachdem der Motor auf Vibrationen getestet wird.
 
 // Wert kann angepasst werden an die Spannung die der Arduino wirklich hat.
 // const float arduino5v = 4.88;
-// Wie lange soll der Anlasser orgeln
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long chokestart;
@@ -47,35 +46,24 @@ unsigned long currentmillis;
 unsigned long previousMillis;
 unsigned long Dauer;
 
-// Boolean Werte für Statiänderungen
-//bool anschalten = false;
-//bool ausschalten = false;
-//bool laeuft = false;
-//bool needchoke = false;
-//boolean LEDvalue = LOW;
-
-
 void setup() {
 
-  // Serielle Konsole starten
+// Serielle Konsole starten
   Serial.begin(9600);
 
-  // Pins bestimmen
+// Pins bestimmen
   pinMode(LEDPin, OUTPUT);
-  pinMode(SchalterPinAn, INPUT);
-  pinMode(SchalterPinAus, INPUT);
   pinMode(SchalterFunkAn, INPUT_PULLUP);  
   pinMode(AnlasserPin, OUTPUT);
   pinMode(IgnitionPin, OUTPUT);
   pinMode(VibrationPin, INPUT);
+  pinMode(LM35, INPUT);
+  pinMode(LM35u, INPUT);
 
-  // Zeitstempel erfassen
-
-
-  // Servo benennen und an Pin 9 (PWM-Pin) anhängen
+// Servo benennen und an PWM-Pin anhängen
   choke.attach(ServoPin);
 
-  //Servo auf Anfangszustand zurücksetzen
+//Servo auf Anfangszustand zurücksetzen
   Serial.print("Choke auf Anfangsstellung ");
   Serial.print(anfpos);
   Serial.print(" zurücksetzen");
@@ -83,94 +71,92 @@ void setup() {
   choke.write(anfpos);
   Serial.println("Ready to Go....");
 
-
 }
 
 void loop()
 {
+/*    Serial.println("DEBUG:");
+    Serial.print("Status Funk: ");
+    Serial.println(StatusFunk);
+    Serial.print("einaus: ");
+    Serial.println(einaus);
+    Serial.print("Modus: ");
+    Serial.println(modus);
+//    Serial.print("Vibration: ");
+//    Serial.println(vibration);    
+*/  
 unsigned long currentMillis = millis();
 
 //Deklarierung von veränderlichen Werten
 int VibrationState = digitalRead(VibrationPin);
-int senstemperatur=analogRead(LM35);
-temperatur=map(senstemperatur, 0, 307, 0, 150); 
 
- // Wenn der Funk-Anschalter zum ersten Mal gedrückt wird
+int senstemperatur=analogRead(LM35);
+tempmotor=map(senstemperatur, 0, 307, 0, 150);
+
+int senstemp2=analogRead(LM35u);
+tempumgebung=map(senstemp2, 0, 307, 0, 150); 
+
+//Serial.print("Temperatur vom Motor: ");
+//Serial.print(temperatur);
+//Serial.print("°C");
+//Serial.println("");
+
+ // Wenn per Funk-Schalter gedrückt wird
   if (digitalRead(SchalterFunkAn) == 0 && StatusFunk == 0) {
     einaus = 1;
     modus = 1;
-    endlageValue = 0;
     currentMillis = millis();
     previousMillis = 0;
-        
+
+// Überprüfung ob der Motor bereits warm ist   
+ if (tempmotor <= ( tempumgebung + schwellwertchoke )) {
+Serial.print("Umgebungstemperatur: ");
+Serial.print(tempumgebung);
+Serial.println("°C");
+Serial.print("Temperatur vom Motor: ");
+Serial.print(tempmotor);
+Serial.println("°C");
+Serial.print("und damit kleiner als Mindesttemperatur von ");
+Serial.print((tempumgebung + schwellwertchoke));
+Serial.println("°C, also starten wir mit Choke");
+//Serial.println("");
     Schritt = 0;
+ } else {
+Serial.print("Umgebungstemperatur: ");
+Serial.print(tempumgebung);
+Serial.print("°C, Temperatur vom Motor: ");
+Serial.println(tempmotor);
+Serial.print("°C und damit groesser als Mindesttemperatur von ");
+Serial.print((tempumgebung + schwellwertchoke));
+Serial.print("°C also starten wir ohne Choke");
+Serial.println("");
+  Schritt = 1;
+ }
     digitalWrite(LEDPin, HIGH);
     Serial.println("Es wurde ueber Funk angeschaltet");
-    Serial.print(digitalRead(SchalterFunkAn));
-    Serial.print(StatusFunk);
-    Serial.println(" ");
+//    Serial.print(digitalRead(SchalterFunkAn));
+//    Serial.print(StatusFunk);
+//    Serial.println(" ");
     StatusFunk = 1;
   }
 
-  // Wenn der Funk-Ausschalter zum ersten Mal gedrückt wird
+// Wenn der Funk-Ausschalter gedrückt wird
   if (digitalRead(SchalterFunkAn) == 1 && StatusFunk == 1) {
     einaus = 0;
-//    currentMillis = millis();
-//    previousMillis = currentMillis;
     Dauer = 0; 
     Schritt = 0;
-    endlageValue = 0;
+    modus = 1;
     digitalWrite(LEDPin, LOW);
     Serial.println("LED geht AUS");
     Serial.println("Es wurde ueber Funk ausgeschaltet");
-    Serial.print(digitalRead(SchalterFunkAn));
-    Serial.print(StatusFunk);
-    Serial.println(" ");
+//    Serial.print(digitalRead(SchalterFunkAn));
+//    Serial.print(StatusFunk);
+//    Serial.println(" ");
     StatusFunk = 0;
     }
 
-
-
-  if (digitalRead(SchalterPinAn) == 1) {
-    einaus = 1;
-    modus = 1;
-    endlageValue = 0;
-    currentMillis = millis();
-    previousMillis = 0;    
-    if (temperatur > 40) {
-      Schritt = 1;
-    } else {
-    Schritt = 0;  
-    }
-    digitalWrite(LEDPin, HIGH);
-    Serial.println("LED geht AN");
-    Serial.println("Es wurde angeschaltet");
-  }
-
-  // Wenn der Ausschalter gedrückt wird
-  if (digitalRead(SchalterPinAus) == 1) {
-    einaus = 0;
-//    currentMillis = millis();
-//    previousMillis = currentMillis;
-    Dauer = 0; 
-    Schritt = 0;
-    endlageValue = 0;
-    digitalWrite(LEDPin, LOW);
-    Serial.println("LED geht AUS");
-    Serial.println("Es wurde ausgeschaltet");
-/*    Serial.println(currentMillis);
-    Serial.println(previousMillis);
-    Serial.println(Dauer);
-    Serial.println(modus);
-    Serial.println(einaus);
-    Serial.println(endlageValue);
-*/  }
-  
- 
 if (modus == 1 && einaus == 1)
  {
-   if (endlageValue==0)
-   {
      if (currentMillis  - previousMillis > Dauer )  
      {
        Schritt++;  // nächster Schritt
@@ -202,12 +188,12 @@ if (modus == 1 && einaus == 1)
        case 4: // Anlasser stoppen
          Serial.println("Anlasser stoppen");
          digitalWrite(AnlasserPin, LOW);
-         Dauer = 10;
+         Dauer = chokezeit;
          break;
 
        case 5: // Choke zu
 
-         Serial.println("Motor läuft, Choke zu");
+         Serial.println("Choke zu wenn offen");
          if (pos < anfpos) {
             while (pos < anfpos) {
                 choke.write(pos);
@@ -215,43 +201,77 @@ if (modus == 1 && einaus == 1)
             }
          }
 
-         Dauer=chokezeit;
+         Dauer=motorcheckzeit;
          break;
 
        case 6: // Check ob Motor läuft
+         Serial.print("Vibration: ");
          Serial.println(VibrationState);
- 
- /*      
-         if(VibrationState == HIGH)
+
+        if(VibrationState == HIGH)
           {
-            digitalWrite(ledPin,HIGH);
+          Serial.println("Motor vibriert, alles gut!");
+          versuchohnechoke = 0;
+          modus = 0;  
           }
           else
           {
-            digitalWrite(ledPin,LOW);
-          }
+            //Schaun wir mal, vielleicht ist der Motor ja warm und läuft schon
+             if (tempmotor > (tempumgebung + schwellwertlaeuft))
+             {
+             Serial.print("Motortemperatur: ");
+             Serial.print(tempmotor);
+             Serial.print(" und damit größer als der Schwellwert von ");
+             Serial.print((tempumgebung + schwellwertlaeuft));
+             Serial.print(" Grad, Motor läuft");
+             Serial.println("");
+             versuchohnechoke = 0;
+             modus = 0;
+             } else
+             {
+             Serial.print("Motortemperatur: ");
+             Serial.print(tempmotor);
+             Serial.print(" und damit kleiner als der Schwellwert von ");
+             Serial.print((tempumgebung + schwellwertlaeuft));
+             Serial.print(" Grad, Motor läuft NICHT");
+             Serial.println("");
 
-*/          
+             if (versuchohnechoke < 3) {
+                 versuchohnechoke++;
+                 Serial.println("Probieren wir noch mal ohne Choke zu starten");
+                 Serial.print("Startversuch: ");
+                 Serial.print(versuchohnechoke);
+                 Serial.println("");
+                 anlasserzeit=anlasserzeitohnechoke;
+                 Schritt=2;
+                 currentMillis = millis();
+                 previousMillis = 0;    
+                 Dauer=20000;
+             }
+             else {
+                 Serial.println("Mehr als 3 Startversuche machen wir nicht. Fertig.");
+                 einaus = 0;
+                 versuchohnechoke = 0;
+                 Schritt = 0;
+                 digitalWrite(LEDPin, LOW);
+                 Serial.println("LED geht AUS");
+                 Serial.println("Es wurde ausgeschaltet");
+                 Dauer=1;
+         }
+        }
+
+             
+             }
+//          }
+
+
+
+         
+//         if(VibrationState == LOW)
+            
+           
         Dauer=laufzeit;
-       
-
-      case 7: // Check ob Motor läuft
-
-        if(VibrationState == HIGH)
-        {
-         endlageValue = 1;       
-        }
-        else // Noch ein Startversuch aber ohne Choke
-        {
-         anlasserzeit=anlasserzeitohnechoke;
-         Schritt=2;
-         currentMillis = millis();
-         previousMillis = 0;    
- 
-        }
-
-        Dauer=1;
-
+        break;
 
        default:
          Schritt = 0;
@@ -259,14 +279,11 @@ if (modus == 1 && einaus == 1)
        }
        previousMillis = currentMillis; // "Delay" neu starten
      }  //  if (currentMillis  - previousMillis > Dauer )  
-   }   // if (endlageValue==0)
  } //   if (modus == 1)
 
 
 if (modus == 1 && einaus == 0)
  {
-   if (endlageValue==0)
-   {
      if (currentMillis  - previousMillis > Dauer )  
      {
        Schritt++;
@@ -284,15 +301,17 @@ if (modus == 1 && einaus == 0)
             digitalWrite(AnlasserPin, LOW);
          Serial.println("Zündung stoppen");
             digitalWrite(IgnitionPin, LOW);
+         Serial.println("Startversuche auf 0 zurücksetzen");
+         versuchohnechoke = 0;
  
-         Dauer = 1000; // sec warten
-         break;
-
-        case 2: // Endprozedur alles auf Anfang
-        Serial.println("Alles auf Anfang, Endprozedur");
-         endlageValue = 1;
-         modus = 0;
+//         Dauer = 1000; // sec warten
+//         break;
+//
+//        case 2: // Endprozedur alles auf Anfang
+//        StatusFunk = 0;
+         Serial.println("Alles auf Anfang gesetzt, FERTIG!");
          Dauer=1;
+         modus = 0;
          break;
 
 
@@ -302,7 +321,6 @@ if (modus == 1 && einaus == 0)
        }
        previousMillis = currentMillis; // "Delay" neu starten
      }  //  if (currentMillis  - previousMillis > Dauer )  
-   }   // if (endlageValue==0)
  } //   if (modus == 1)
 
 } // loop-Ende

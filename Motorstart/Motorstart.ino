@@ -9,12 +9,16 @@ const int LEDPin = 13; // LED
 const int SchalterFunkAn = 4; // Schalter Funk
 const int ServoPin = 10; // Hier hinter steckt ein Servo
 const int AnlasserPin = 3; // Relais für den Anlasser
-const char SpannungsPin = 00; // Spannungssensor Anlasserbatterie
-const char VBattPin = 00; // Spannungssensor Versorgungsbatterie
-const char LM35 = A4; // PIN für Temperatursensor LM35DZ am Motor
-const char LM35u = A5; // PIN für Temperatursensor Umgebung
 const int IgnitionPin = 2; // Relais Zündung ein
 const int VibrationPin = 5; // Vibrationssensor
+// Optional (wenn nicht gebraucht 00 eintragen): 
+const char SpannungsPin = 00; // Spannungssensor Anlasserbatterie
+const char VBattPin = 00; // Spannungssensor Versorgungsbatterie
+const char MagnetVentil = 00; // Magnetventil als Benzinhahn
+float vschwell = 1; // Schwellwert für die Spannungsmessung nach Start
+const char LM35 = A4; // PIN für Temperatursensor LM35DZ am Motor
+const char LM35u = A5; // PIN für Temperatursensor Umgebung
+const int VibrationPin2 = 6; // PIN für redundanten Vibrationssensor
 
 // Deklaration sonstiger wichtiger Werte
 const int anfpos = 110; //Anfangsposition des Servos
@@ -23,8 +27,8 @@ int pos = anfpos;
 int StatusFunk = 1; // Status Funkschalter
 int modus = 0; // 0=AllesAus, 1=Anschalten, 2 = Läuft, 3=Ausschalten
 int Schritt = 0;
-const int schwellwertchoke = 25; // Grenzwert für Temperatur Choke
-const int schwellwertlaeuft = 4; // Grenzwert für Temperatur läuft
+const int schwellwertchoke = 6; // Grenzwert für Temperatur Choke
+const int schwellwertlaeuft = 2; // Grenzwert für Temperatur läuft
 int tempmotor = 0; // Temperatur des Motors
 int tempumgebung = 0; // Umgebungstemperatur
 int versuchohnechoke = 0;
@@ -33,8 +37,9 @@ const float R1 = 30000.0f; // Der Widerstand R1 hat eine größe von 30 kOhm
 const float R2 = 7500.0f; //  Der Widerstand R2 hat eine größe von 7,5 kOhm
 const float MAX_VIN = 5.0f;
 float vstart;
-float vschwell = 1; // Schwellwert für die Spannungsmessung nach Start
 bool chokeON;
+int VibrationState;
+int VibrationState2;
 
 
 // Zeiten
@@ -68,6 +73,9 @@ void setup() {
   if (VibrationPin != 00) {
     pinMode(VibrationPin, INPUT);
   }
+  if (VibrationPin2 != 00) {
+    pinMode(VibrationPin2, INPUT);
+  }
   if (LM35 != 00) {
     pinMode(LM35, INPUT);
   }
@@ -96,18 +104,30 @@ void loop()
 unsigned long currentMillis = millis();
 
 //Deklarierung von veränderlichen Werten
-int VibrationState = digitalRead(VibrationPin);
+//if (VibrationPin != 00) {
+   VibrationState = digitalRead(VibrationPin);
+//  }
 
+//if (VibrationPin2 != 00) {
+   VibrationState2 = digitalRead(VibrationPin2);
+//  }
+  
 if (SpannungsPin != 00) {
   float vout = (analogRead(SpannungsPin) * MAX_VIN) / 1024.0f;
   float vin = vout / (R2/(R1+R2)); 
 }
 
+if (LM35 != 00) {
 int senstemperatur=analogRead(LM35);
 tempmotor=map(senstemperatur, 0, 307, 0, 150);
+}
 
+if (LM35u != 00) {
 int senstemp2=analogRead(LM35u);
 tempumgebung=map(senstemp2, 0, 307, 0, 150); 
+}
+
+
 
  // Wenn per Funk-Schalter gedrückt wird
   if (digitalRead(SchalterFunkAn) == 0 && StatusFunk == 0) {
@@ -199,8 +219,10 @@ if (modus == 1)
        
        case 3: // Anlasser betätigen
          Serial.println("Anlasser betätigen");
+         if ( chokeON ) {
          chokeMillis = millis(); // Startzeit für den Choke
-            digitalWrite(AnlasserPin, HIGH);
+         }
+         digitalWrite(AnlasserPin, HIGH);
          Dauer = anlasserzeit; // Pause zeit 2
          break;
 
@@ -223,7 +245,16 @@ if (modus == 1)
           {
           Serial.println("Motor vibriert und läuft, alles gut!");
           versuchohnechoke = 0;
-          modus = 2;  
+          modus = 2; // läuft
+          } else {
+           Serial.println("Sensor1 registriert keine Vibration");
+           if (VibrationState2 == 1) {
+            Serial.println("Redundanter Vibrationssensor vibriert, Motor läuft, alles gut!");
+            versuchohnechoke = 0;
+            modus = 2; // läuft 
+           } else {
+            Serial.println("Sensor2 registriert keine Vibration");
+           }
           }
         if ((SpannungsPin != 00) && (modus == 1)) {
             Serial.print("Spannungs-Check");
@@ -274,7 +305,7 @@ if (modus == 1)
              }
              else {
                  Serial.println("Mehr als 3 Startversuche machen wir nicht. Fertig.");
-                 modus = 2; // Da der Funk-Schalter auf An steht muss erst manuell ausgeschaltet werden.
+                 modus = 3; // Da der Funk-Schalter auf An steht muss erst manuell ausgeschaltet werden.
                  versuchohnechoke = 0;
                  Schritt = 0;
                  digitalWrite(LEDPin, LOW);
@@ -305,6 +336,7 @@ if (modus == 1)
        if ( chokeMillis != 0 ) 
        { 
        if (  ( chokeMillis + chokezeit) < currentMillis )
+//       if ( currentMillis - chokeMillis > chokezeit )
        {
          Serial.println("Choke zu");
          if (pos < anfpos) {
@@ -407,6 +439,13 @@ if (Debug == 1) {
         default:
         break;
         }
+      Serial.println("Choke-Millis, chokezeit, currentMillis:");
+      Serial.print(chokeMillis);
+      Serial.print(",");
+      Serial.print(chokezeit);
+      Serial.print(",");
+      Serial.print(currentMillis);
+      Serial.println("");
       if (SpannungsPin != 00) {
         float vout = (analogRead(SpannungsPin) * MAX_VIN) / 1024.0f;
         float vin = vout / (R2/(R1+R2)); 
@@ -414,6 +453,7 @@ if (Debug == 1) {
         Serial.print(vin,2);
         Serial.println("");
       }
+      Serial.println("======================================================");
       debugMillis = millis();
      } //Zeitablauf
 } //Debug-Ende

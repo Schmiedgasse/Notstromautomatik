@@ -12,10 +12,10 @@ const int AnlasserPin = 3; // Relais für den Anlasser
 const int IgnitionPin = 2; // Relais Zündung ein
 const int VibrationPin = 5; // Vibrationssensor
 // Optional (wenn nicht gebraucht 00 eintragen): 
-const char SpannungsPin = 00; // Spannungssensor Anlasserbatterie
-const char VBattPin = 00; // Spannungssensor Versorgungsbatterie
+const char SpannungsPin = A2; // Spannungssensor Anlasserbatterie
+//const char VBattPin = 00; // Spannungssensor Versorgungsbatterie
 const char MagnetVentil = 00; // Magnetventil als Benzinhahn
-float vschwell = 1; // Schwellwert für die Spannungsmessung nach Start
+float vschwell = 0.5; // Schwellwert für die Spannungsmessung nach Start
 const char LM35 = A4; // PIN für Temperatursensor LM35DZ am Motor
 const char LM35u = A5; // PIN für Temperatursensor Umgebung
 const int VibrationPin2 = 6; // PIN für redundanten Vibrationssensor
@@ -41,6 +41,13 @@ bool chokeON;
 int VibrationState;
 int VibrationState2;
 
+//Zeitstempel für Parallelverarbeitung
+unsigned long chokestart;
+unsigned long currentmillis;
+unsigned long previousMillis;
+unsigned long debugMillis;
+unsigned long Dauer;
+unsigned long chokeMillis = 0;
 
 // Zeiten
 const unsigned long chokezeit = 1900; // Zeit die der Choke offen sein soll, eine Sekunde = 1000
@@ -52,13 +59,6 @@ const unsigned long motorcheckzeit = 10000; // Zeit nachdem überprüft wird ob 
 // Wert kann angepasst werden an die Spannung die der Arduino wirklich hat.
 // const float arduino5v = 4.88;
 
-//Zeitstempel für Parallelverarbeitung
-unsigned long chokestart;
-unsigned long currentmillis;
-unsigned long previousMillis;
-unsigned long debugMillis;
-unsigned long Dauer;
-unsigned long chokeMillis = 0;
 
 void setup() {
 
@@ -84,6 +84,9 @@ void setup() {
   }
   if (SpannungsPin != 00) {
     pinMode(SpannungsPin, INPUT);
+  }
+  if (MagnetVentil != 00) {
+    pinMode(MagnetVentil, OUTPUT);
   }
 
 // Servo benennen und an PWM-Pin anhängen
@@ -211,9 +214,14 @@ if (modus == 1)
          chokeON = true;
          break;
 
-       case 2: // Zündung anschalten
+       case 2: // Zündung anschalten und Benzinhahn auf
          Serial.println("Zündung an");
             digitalWrite(IgnitionPin, HIGH);
+         if (MagnetVentil != 00) {
+             Serial.println("Magnetventil Benzinhahn auf");
+             digitalWrite(MagnetVentil, HIGH);
+          }
+
          Dauer = 1000; // Pause zeit 2
          break;
        
@@ -257,15 +265,25 @@ if (modus == 1)
            }
           }
         if ((SpannungsPin != 00) && (modus == 1)) {
-            Serial.print("Spannungs-Check");
+            Serial.println("Spannungs-Check: ");
               float vout = (analogRead(SpannungsPin) * MAX_VIN) / 1024.0f;
               float vin = vout / (R2/(R1+R2));
               if (vin > ( vstart + vschwell) ) {
                  Serial.print("Spannung der Starterbatterie jetzt ");
                  Serial.print(vin,2);
-                 Serial.print(" und damit ueber dem Schwellwert, Motor läuft");
+                 Serial.print(" und damit ueber dem Schwellwert ");
+                 Serial.print( (vstart + vschwell) );
+                 Serial.print(", Motor läuft");
                  Serial.println("");
                  modus = 2; //läuft
+              } else {
+                Serial.print("Spannung der Starterbatterie jetzt ");
+                Serial.print(vin,2);
+                Serial.print(" und damit NICHT ueber dem Schwellwert von ");
+                Serial.print( (vstart + vschwell) );
+                Serial.print(", Motor läuft NICHT");
+                Serial.println("");
+                 
               }
           }
           if ((VibrationState == 0) && (modus == 1))
@@ -377,6 +395,10 @@ if (modus == 3)
             digitalWrite(AnlasserPin, LOW);
          Serial.println("Zündung stoppen");
             digitalWrite(IgnitionPin, LOW);
+         if (MagnetVentil != 00) {
+             Serial.println("Magnetventil Benzinhahn zu");
+             digitalWrite(MagnetVentil, LOW);
+          }
          Serial.println("Startversuche auf 0 zurücksetzen");
          versuchohnechoke = 0;
  
@@ -416,9 +438,14 @@ if (Debug == 1) {
       Serial.println("°C");
       }
       if (VibrationPin != 00) {
-      Serial.print("Vibrationsstatus: ");
+      Serial.print("Vibrationsstatus Sensor 1: ");
       Serial.println(VibrationState); 
       }
+      if (VibrationPin2 != 00) {
+      Serial.print("Vibrationsstatus Sensor 2: ");
+      Serial.println(VibrationState2); 
+      }
+
       Serial.print("Status Funk: ");
       Serial.println(StatusFunk);
       Serial.print("Modus: ");
@@ -439,13 +466,6 @@ if (Debug == 1) {
         default:
         break;
         }
-      Serial.println("Choke-Millis, chokezeit, currentMillis:");
-      Serial.print(chokeMillis);
-      Serial.print(",");
-      Serial.print(chokezeit);
-      Serial.print(",");
-      Serial.print(currentMillis);
-      Serial.println("");
       if (SpannungsPin != 00) {
         float vout = (analogRead(SpannungsPin) * MAX_VIN) / 1024.0f;
         float vin = vout / (R2/(R1+R2)); 
@@ -453,6 +473,13 @@ if (Debug == 1) {
         Serial.print(vin,2);
         Serial.println("");
       }
+      Serial.println("Choke-Millis, chokezeit, currentMillis:");
+      Serial.print(chokeMillis);
+      Serial.print(",");
+      Serial.print(chokezeit);
+      Serial.print(",");
+      Serial.print(currentMillis);
+      Serial.println("");
       Serial.println("======================================================");
       debugMillis = millis();
      } //Zeitablauf

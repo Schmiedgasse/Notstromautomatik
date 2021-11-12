@@ -15,6 +15,7 @@ const int VibrationPin = 8; // Vibrationssensor
 const char LM35 = A4; // PIN für Temperatursensor LM35DZ am Motor
 const char LM35u = A5; // PIN für Temperatursensor Umgebung
 const int switchPin = 10; // Schiebeschalter
+const int tasterPin = A3; // Starter manuell
 
 // Deklaration sonstiger wichtiger Werte
 const int anfpos = 110; //Anfangsposition des Servos
@@ -31,6 +32,7 @@ int VibrationState;
 int senstemperatur;
 int senstemp2;
 int switchState = 0; // Schiebeschalter Wert
+int tasterstatus = 0;
 
 //Zeitstempel für Parallelverarbeitung
 unsigned long chokestart;
@@ -66,6 +68,7 @@ void setup() {
   pinMode(LM35, INPUT);
   pinMode(LM35u, INPUT);
   pinMode(switchPin, INPUT);
+  pinMode(tasterPin, INPUT);
 
   // Servo benennen und an PWM-Pin anhängen
   choke.attach(ServoPin);
@@ -318,8 +321,9 @@ void loop() {
 
 
 
-  } else { // Ende Switch-State
+  } else { // Ende Switch-State, ab hier manueller Betrieb
 
+    tasterstatus = digitalRead(tasterPin);
 
     //Serial.println("Switch steht auf aus");
     if (modus > 0) {
@@ -369,8 +373,21 @@ void loop() {
           modus = 0;
         }
 
-
       }
+    } else { // Modus entspricht Null
+
+if (tasterstatus == HIGH) { // Anlasser manuell betätigen
+       digitalWrite(AnlasserPin, HIGH);
+ 
+      
+ //     Serial.println("Modus Null und Taster gedrueckt");
+  
+} else { // Anlasser ist nicht betätigt.
+
+       digitalWrite(AnlasserPin, LOW);
+ 
+  
+}
 
     }
   }
@@ -384,7 +401,7 @@ void loop() {
 //
 //     if (currentMillis  - debugMillis > 2000 )  {
 //      Serial.println("------------------------------------------------------");
-//      Serial.println("DEBUG:");
+//      Serial.println("DEBUG: ");
 //      if (LM35u != 00) {
 //      Serial.print("Umgebungstemperatur: ");
 //      Serial.print(tempumgebung);
@@ -431,14 +448,14 @@ void loop() {
 //        Serial.print(vin,2);
 //        Serial.println("");
 //      }
-//      Serial.println("Choke-Millis, chokezeit, currentMillis:");
+//      Serial.println("Choke - Millis, chokezeit, currentMillis: ");
 //      Serial.print(chokeMillis);
-//      Serial.print(",");
+//      Serial.print(", ");
 //      Serial.print(chokezeit);
-//      Serial.print(",");
+//      Serial.print(", ");
 //      Serial.print(currentMillis);
 //      Serial.println("");
-//      Serial.println("======================================================");
+//      Serial.println(" == == == == == == == == == == == == == == == == == == == == == == == == == == == ");
 //      debugMillis = millis();
 //     } //Zeitablauf
 //} //Debug-Ende

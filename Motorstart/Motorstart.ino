@@ -325,10 +325,19 @@ void loop() {
 
     tasterstatus = digitalRead(tasterPin);
 
+
+    if (modus == 4) { //Es wurde mit Schalter auf manuell gestartet
+      Serial.println("Zündung starten, manueller Betrieb");
+      digitalWrite(IgnitionPin, HIGH);
+      modus = 0;
+
+    }
+
+
     //Serial.println("Switch steht auf aus");
     if (modus > 0) {
 
-      if (modus != 5) {
+      if (modus != 5) { // Wenn auf manuellen Betrieb umgeschaltet wurde
 
         Serial.println("Anlasser stoppen");
         digitalWrite(AnlasserPin, LOW);
@@ -376,18 +385,18 @@ void loop() {
       }
     } else { // Modus entspricht Null
 
-if (tasterstatus == HIGH) { // Anlasser manuell betätigen
-       digitalWrite(AnlasserPin, HIGH);
- 
-      
- //     Serial.println("Modus Null und Taster gedrueckt");
-  
-} else { // Anlasser ist nicht betätigt.
+      if (tasterstatus == HIGH) { // Anlasser manuell betätigen
+        digitalWrite(AnlasserPin, HIGH);
 
-       digitalWrite(AnlasserPin, LOW);
- 
-  
-}
+
+        //     Serial.println("Modus Null und Taster gedrueckt");
+
+      } else { // Anlasser ist nicht betätigt.
+
+        digitalWrite(AnlasserPin, LOW);
+
+
+      }
 
     }
   }

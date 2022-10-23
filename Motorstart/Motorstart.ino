@@ -317,7 +317,15 @@ void loop() {
 
     //debug();
 
+    if (modus == 5) { //Umschaltung von manuellem Betrieb auf Automatikbetrieb, alles zurücksetzen
+Schritt = 0;
+Dauer = 1;
+previousMillis = currentMillis;
+modus = 1;
+versuchohnechoke = 0;
 
+      
+    }
 
 
 
@@ -361,9 +369,9 @@ void loop() {
         }
         Dauer = 9000;
         previousMillis = currentMillis;
-      }
       modus = 5;
       Schritt = 0;
+      }
 
       digitalWrite(LEDPin, LOW);
 
